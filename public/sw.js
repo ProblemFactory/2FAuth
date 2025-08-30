@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v5';
+const CACHE_NAME = '2fauth-offline-v6';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -10,7 +10,16 @@ self.addEventListener('install', event => {
       return cache.addAll([
         '/',
         '/manifest.json'
-      ]).catch(error => {
+      ]).then(() => {
+        // Also try to cache critical assets that are currently available
+        return Promise.allSettled([
+          cache.add('/build/assets/app-SHmEvkuL.js').catch(() => {}),
+          cache.add('/build/assets/app-BIlsKXRE.css').catch(() => {}),
+          cache.add('/favicon.png').catch(() => {}),
+          cache.add('/favicon.ico').catch(() => {}),
+          cache.add('/favicon_lg.png').catch(() => {})
+        ]);
+      }).catch(error => {
         console.log('SW: Pre-cache failed:', error);
       });
     }).then(() => {
@@ -44,6 +53,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
+  
+  // Skip Chrome extension requests completely
+  if (request.url.startsWith('chrome-extension://') || request.url.startsWith('moz-extension://')) {
+    console.log('SW: Ignoring extension request:', url.href);
+    return;
+  }
   
   console.log('SW: Handling fetch for:', url.pathname);
   
@@ -112,7 +127,12 @@ self.addEventListener('fetch', event => {
           if (response && response.status === 200) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then(cache => {
-              cache.put(request, responseToCache);
+              // Only cache HTTP/HTTPS requests, not chrome-extension:// requests
+              if (request.url.startsWith('http')) {
+                cache.put(request, responseToCache).catch(err => {
+                  console.log('SW: Failed to cache:', request.url, err);
+                });
+              }
             });
           }
           return response;
