@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v6';
+const CACHE_NAME = '2fauth-offline-v7';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -27,7 +27,7 @@ self.addEventListener('install', event => {
               }
             }
             
-            // Cache some critical views that are likely to be needed offline
+            // Cache some critical views and their dependencies that are likely to be needed offline
             const criticalViews = [
               'resources/js/views/twofaccounts/Accounts.vue',
               'resources/js/views/auth/Login.vue',
@@ -37,6 +37,36 @@ self.addEventListener('install', event => {
             criticalViews.forEach(view => {
               if (manifest[view]) {
                 criticalAssets.push(`/build/${manifest[view].file}`);
+                // Also cache imports for this view
+                if (manifest[view].imports) {
+                  manifest[view].imports.forEach(importKey => {
+                    if (manifest[importKey] && importKey.startsWith('_')) {
+                      criticalAssets.push(`/build/${manifest[importKey].file}`);
+                    }
+                  });
+                }
+              }
+            });
+            
+            // Also cache some common shared dependencies
+            const sharedModules = [
+              '_Form-BJ8nnDnl.js',
+              '_webauthnService-BzLsuOVI.js',
+              '_OtpDisplay-BWenopBQ.js',
+              '_SearchBox-BlRjkqin.js',
+              '_Spinner-6RPfQh7-.js',
+              '_bus-BE_DjQ1S.js'
+            ];
+            
+            sharedModules.forEach(moduleKey => {
+              if (manifest[moduleKey]) {
+                criticalAssets.push(`/build/${manifest[moduleKey].file}`);
+                // Also cache CSS if any
+                if (manifest[moduleKey].css) {
+                  manifest[moduleKey].css.forEach(cssFile => {
+                    criticalAssets.push(`/build/${cssFile}`);
+                  });
+                }
               }
             });
             
