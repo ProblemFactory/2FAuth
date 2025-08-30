@@ -119,11 +119,20 @@
         // Try offline authentication first if offline
         if (isOfflineMode.value) {
             try {
+                // Check if we have stored offline WebAuthn credentials
+                if (!twofaccounts.hasOfflineData() || !await twofaccounts.hasOfflineWebAuthnCredentials()) {
+                    notify.alert({ text: 'No offline WebAuthn credentials available. Please use password login.' })
+                    // Switch to legacy form for password login
+                    switchToForm('legacy')
+                    return
+                }
+
                 // Use WebAuthn API for local authentication
                 const publicKeyCredentialRequestOptions = {
                     challenge: new Uint8Array(32).map(() => Math.random() * 255),
                     allowCredentials: [],
-                    userVerification: 'preferred'
+                    userVerification: 'preferred',
+                    timeout: 60000
                 }
 
                 const credential = await navigator.credentials.get({
@@ -149,16 +158,19 @@
                         router.push({ name: 'accounts' })
                         return
                     } else {
-                        notify.alert({ text: trans('auth.forms.authentication_failed'), duration: 10000 })
+                        notify.alert({ text: 'Authentication failed. Please use password login.' })
+                        switchToForm('legacy')
                         return
                     }
                 }
             } catch (error) {
                 console.error('Offline WebAuthn authentication error:', error)
                 if (error.name === 'NotAllowedError') {
-                    notify.alert({ text: 'WebAuthn authentication was cancelled' })
+                    notify.alert({ text: 'WebAuthn authentication was cancelled. Please try password login.' })
+                    switchToForm('legacy')
                 } else {
-                    notify.error({ text: 'Offline WebAuthn authentication failed' })
+                    notify.error({ text: 'Offline WebAuthn authentication failed. Please use password login.' })
+                    switchToForm('legacy')
                 }
                 return
             } finally {

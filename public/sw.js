@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v10';
+const CACHE_NAME = '2fauth-offline-v11';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -66,6 +66,11 @@ self.addEventListener('install', event => {
                     criticalAssets.push(`/build/${cssFile}`);
                   });
                 }
+              }
+              
+              // Cache language files for offline translations
+              if (key.includes('lang/php_') && (key.includes('en') || key.includes('zh-CN'))) {
+                criticalAssets.push(`/build/${manifest[key].file}`);
               }
             });
             

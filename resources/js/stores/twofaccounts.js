@@ -520,6 +520,24 @@ export const useTwofaccounts = defineStore({
          */
         isOfflineAuthenticated() {
             return !!localStorage.getItem('2fauth_offline_user')
+        },
+
+        /**
+         * Check if WebAuthn credentials are available for offline use
+         */
+        async hasOfflineWebAuthnCredentials() {
+            if (!this.offlineDB) await this.initOfflineDB()
+            
+            const key = localStorage.getItem('2fauth_offline_key')
+            if (!key) return false
+            
+            try {
+                const authData = await this.offlineDB.get('auth', 'current_user')
+                return !!(authData && authData.webAuthnCredentials)
+            } catch (error) {
+                console.error('Failed to check offline WebAuthn credentials:', error)
+                return false
+            }
         }
     },
 })
