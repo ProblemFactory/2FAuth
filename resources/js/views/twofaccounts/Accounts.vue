@@ -82,6 +82,20 @@
     })
 
     onMounted(async () => {
+        // Check if we should try offline mode
+        if (!navigator.onLine && twofaccounts.hasOfflineData()) {
+            const loaded = await twofaccounts.loadFromOffline()
+            if (loaded) {
+                notify.info({ text: 'Offline mode - using cached data' })
+                // Start auto-updating OTPs
+                if (!user.preferences.getOtpOnRequest) {
+                    startOfflineOtpUpdates()
+                }
+                return
+            }
+        }
+        
+        // Normal online mode
         // This SFC is reached only if the user has some twofaccounts (see the starter middleware).
         // This allows to display accounts without latency.
         //
@@ -97,6 +111,11 @@
             })
         }
         groups.fetch()
+        
+        // Auto-save to offline storage when online
+        if (navigator.onLine) {
+            setTimeout(() => twofaccounts.saveToOffline(), 2000)
+        }
     })
 
     // Enables the sortable behaviour of the twofaccounts list
@@ -327,11 +346,37 @@
         twofaccounts.selectNone()
     }
 
+    /**
+     * Start updating OTPs in offline mode
+     */
+    function startOfflineOtpUpdates() {
+        const updateOfflineOtps = () => {
+            if (!twofaccounts.isOfflineMode) return
+            
+            // Update OTPs for TOTP accounts
+            twofaccounts.items.forEach(account => {
+                if (account.otp_type === 'totp') {
+                    account.otp = twofaccounts.generateLocalOTP(account)
+                }
+            })
+            
+            // Schedule next update
+            setTimeout(updateOfflineOtps, 1000)
+        }
+        
+        updateOfflineOtps()
+    }
+
 </script>
 
 <template>
     <UseColorMode v-slot="{ mode }">
     <div>
+        <!-- Offline mode indicator -->
+        <div v-if="twofaccounts.isOfflineMode" class="notification is-warning is-light mb-3">
+            <FontAwesomeIcon icon="wifi-slash" />
+            <strong> Offline Mode</strong> - Showing cached accounts (Read-only)
+        </div>
         <GroupSwitch v-if="showGroupSwitch" v-model:showGroupSwitch="showGroupSwitch" v-model:groups="groups.items" />
         <DestinationGroupSelector
             v-if="showDestinationGroupSelector"

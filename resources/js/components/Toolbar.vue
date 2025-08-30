@@ -1,7 +1,26 @@
 <script setup>
+    import { useTwofaccounts } from '@/stores/twofaccounts'
+    import { useNotifyStore } from '@/stores/notify'
+
     const props = defineProps({
         selectedCount: Number
     })
+
+    const twofaccounts = useTwofaccounts()
+    const notify = useNotifyStore()
+
+    const syncOffline = async () => {
+        if (!navigator.onLine) {
+            notify.warning({ text: 'Must be online to sync' })
+            return
+        }
+        
+        try {
+            await twofaccounts.saveToOffline()
+        } catch (error) {
+            notify.error({ text: 'Sync failed: ' + error.message })
+        }
+    }
 </script>
 
 <template>
@@ -23,6 +42,10 @@
                 </button>
                 <button type="button" id="btnSortDescending" @click="$emit('sort-desc')" class="button has-line-height p-1 is-ghost has-text-grey" :title="$t('commons.sort_descending')">
                     <FontAwesomeIcon :icon="['fas', 'sort-alpha-up']" />
+                </button>
+                <!-- offline sync button -->
+                <button v-if="navigator.onLine" type="button" id="btnSyncOffline" @click="syncOffline" class="button has-line-height p-1 is-ghost has-text-grey ml-2" title="Save for offline use">
+                    <FontAwesomeIcon :icon="['fas', 'download']" />
                 </button>
             </div>
         </div>

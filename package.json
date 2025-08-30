@@ -35,5 +35,11 @@
         "vue": "^3.3.4",
         "vue-qrcode-reader": "^5.4.0",
         "vue-router": "^4.2.4"
+    },
+    "dependencies": {
+        "@simplewebauthn/browser": "^13.1.2",
+        "crypto-js": "^4.2.0",
+        "idb": "^8.0.3",
+        "otpauth": "^9.4.1"
     }
 }

@@ -5,13 +5,23 @@
     {
       "src": "/favicon_lg.png",
       "type": "image/png",
-      "sizes": "180x180"
+      "sizes": "180x180",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "start_url": "/",
   "display": "standalone",
   "scope": "/",
   "theme_color": "#242424",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "categories": ["security", "utilities"],
   "shortcuts": [
     {
       "name": "New 2FA",

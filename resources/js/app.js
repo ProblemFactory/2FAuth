@@ -94,3 +94,38 @@ app.mount('#app')
 // Theme
 import { useUserStore } from '@/stores/user'
 useUserStore().applyUserPrefs()
+
+// Register Service Worker for PWA support
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('Service Worker registered:', registration)
+                
+                // Check for updates periodically
+                setInterval(() => {
+                    registration.update()
+                }, 60000) // Check every minute
+            })
+            .catch(error => {
+                console.error('Service Worker registration failed:', error)
+            })
+    })
+    
+    // Handle offline/online events
+    window.addEventListener('online', () => {
+        console.log('Back online')
+        app.config.globalProperties.$notify?.success({
+            text: 'Connection restored',
+            duration: 3000
+        })
+    })
+    
+    window.addEventListener('offline', () => {
+        console.log('Gone offline')
+        app.config.globalProperties.$notify?.warning({
+            text: 'Connection lost - Offline mode active',
+            duration: 5000
+        })
+    })
+}

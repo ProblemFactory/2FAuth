@@ -4,6 +4,9 @@ import { useUserStore } from '@/stores/user'
 import { useNotifyStore } from '@/stores/notify'
 import twofaccountService from '@/services/twofaccountService'
 import { saveAs } from 'file-saver'
+import * as OTPAuth from 'otpauth'
+import { openDB } from 'idb'
+import CryptoJS from 'crypto-js'
 
 export const useTwofaccounts = defineStore({
     id: 'twofaccounts',
@@ -15,6 +18,9 @@ export const useTwofaccounts = defineStore({
             filter: '',
             backendWasNewer: false,
             fetchedOn: null,
+            isOfflineMode: false,
+            offlineDB: null,
+            encryptionKey: null,
         }
     },
 
@@ -235,5 +241,133 @@ export const useTwofaccounts = defineStore({
         accountIdsWithPeriod(period) {
             return this.items.filter(a => a.period == period).map(item => item.id)
         },
+
+        /**
+         * Initialize offline database
+         */
+        async initOfflineDB() {
+            this.offlineDB = await openDB('2FAuthOffline', 1, {
+                upgrade(db) {
+                    if (!db.objectStoreNames.contains('accounts')) {
+                        db.createObjectStore('accounts', { keyPath: 'id' })
+                    }
+                }
+            })
+        },
+
+        /**
+         * Save current accounts to offline storage
+         */
+        async saveToOffline() {
+            if (!this.offlineDB) await this.initOfflineDB()
+            
+            // Use a simple passkey-based encryption
+            const key = localStorage.getItem('2fauth_offline_key') || this.generateKey()
+            localStorage.setItem('2fauth_offline_key', key)
+            
+            const tx = this.offlineDB.transaction('accounts', 'readwrite')
+            const store = tx.objectStore('accounts')
+            
+            // Clear and save all accounts
+            await store.clear()
+            for (const account of this.items) {
+                // Encrypt sensitive data
+                const encrypted = {
+                    ...account,
+                    secret: CryptoJS.AES.encrypt(account.secret || '', key).toString()
+                }
+                await store.put(encrypted)
+            }
+            
+            localStorage.setItem('2fauth_offline_sync', new Date().toISOString())
+            useNotifyStore().success({ text: 'Accounts saved for offline use' })
+        },
+
+        /**
+         * Load accounts from offline storage
+         */
+        async loadFromOffline() {
+            if (!this.offlineDB) await this.initOfflineDB()
+            
+            const key = localStorage.getItem('2fauth_offline_key')
+            if (!key) {
+                useNotifyStore().error({ text: 'No offline data found' })
+                return false
+            }
+            
+            const accounts = await this.offlineDB.getAll('accounts')
+            
+            // Decrypt and generate OTPs
+            this.items = accounts.map(account => {
+                const decrypted = {
+                    ...account,
+                    secret: CryptoJS.AES.decrypt(account.secret, key).toString(CryptoJS.enc.Utf8)
+                }
+                
+                // Generate OTP if TOTP
+                if (decrypted.otp_type === 'totp') {
+                    decrypted.otp = this.generateLocalOTP(decrypted)
+                }
+                
+                return decrypted
+            })
+            
+            this.isOfflineMode = true
+            return true
+        },
+
+        /**
+         * Generate OTP locally using otpauth
+         */
+        generateLocalOTP(account) {
+            try {
+                const totp = new OTPAuth.TOTP({
+                    secret: account.secret,
+                    algorithm: account.algorithm || 'SHA1',
+                    digits: account.digits || 6,
+                    period: account.period || 30,
+                })
+                
+                const now = Math.floor(Date.now() / 1000)
+                const timeStep = account.period || 30
+                
+                return {
+                    password: totp.generate(),
+                    generated_at: now,
+                    period: timeStep,
+                    countdown: timeStep - (now % timeStep)
+                }
+            } catch (error) {
+                console.error('Failed to generate OTP:', error)
+                return null
+            }
+        },
+
+        /**
+         * Generate a simple encryption key
+         */
+        generateKey() {
+            return CryptoJS.lib.WordArray.random(256/8).toString()
+        },
+
+        /**
+         * Check if offline mode is available
+         */
+        hasOfflineData() {
+            return !!localStorage.getItem('2fauth_offline_key')
+        },
+
+        /**
+         * Clear offline data
+         */
+        async clearOfflineData() {
+            if (this.offlineDB) {
+                const tx = this.offlineDB.transaction('accounts', 'readwrite')
+                await tx.objectStore('accounts').clear()
+            }
+            localStorage.removeItem('2fauth_offline_key')
+            localStorage.removeItem('2fauth_offline_sync')
+            this.isOfflineMode = false
+        }
     },
 })
