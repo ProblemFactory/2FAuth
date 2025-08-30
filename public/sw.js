@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v4';
+const CACHE_NAME = '2fauth-offline-v5';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -117,8 +117,23 @@ self.addEventListener('fetch', event => {
           }
           return response;
         }).catch(error => {
-          console.log('SW: Asset fetch failed:', url.pathname, error);
-          throw error;
+          console.log('SW: Asset fetch failed, but continuing:', url.pathname, error);
+          
+          // For favicon and other non-critical assets, return a dummy response to prevent errors
+          if (url.pathname.includes('/favicon') || url.pathname.includes('icon')) {
+            console.log('SW: Returning dummy response for favicon');
+            return new Response('', { 
+              status: 404,
+              statusText: 'Not Found',
+              headers: { 'Content-Type': 'image/x-icon' }
+            });
+          }
+          
+          // For other assets, return a basic error response
+          return new Response('Asset not available offline', {
+            status: 404,
+            statusText: 'Offline - Asset Not Available'
+          });
         });
       })
     );
