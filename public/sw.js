@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v7';
+const CACHE_NAME = '2fauth-offline-v8';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -48,22 +48,21 @@ self.addEventListener('install', event => {
               }
             });
             
-            // Also cache some common shared dependencies
-            const sharedModules = [
-              '_Form-BJ8nnDnl.js',
-              '_webauthnService-BzLsuOVI.js',
-              '_OtpDisplay-BWenopBQ.js',
-              '_SearchBox-BlRjkqin.js',
-              '_Spinner-6RPfQh7-.js',
-              '_bus-BE_DjQ1S.js'
-            ];
-            
-            sharedModules.forEach(moduleKey => {
-              if (manifest[moduleKey]) {
-                criticalAssets.push(`/build/${manifest[moduleKey].file}`);
+            // Also cache some common shared dependencies by searching the manifest
+            Object.keys(manifest).forEach(key => {
+              // Cache common shared modules that start with underscore (internal dependencies)
+              if (key.startsWith('_') && (
+                key.includes('Form') || 
+                key.includes('webauthnService') || 
+                key.includes('OtpDisplay') || 
+                key.includes('SearchBox') || 
+                key.includes('Spinner') || 
+                key.includes('bus')
+              )) {
+                criticalAssets.push(`/build/${manifest[key].file}`);
                 // Also cache CSS if any
-                if (manifest[moduleKey].css) {
-                  manifest[moduleKey].css.forEach(cssFile => {
+                if (manifest[key].css) {
+                  manifest[key].css.forEach(cssFile => {
                     criticalAssets.push(`/build/${cssFile}`);
                   });
                 }
