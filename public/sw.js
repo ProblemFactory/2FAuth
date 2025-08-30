@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v9';
+const CACHE_NAME = '2fauth-offline-v10';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
