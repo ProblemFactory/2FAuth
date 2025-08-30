@@ -9,8 +9,12 @@
     const twofaccounts = useTwofaccounts()
     const notify = useNotifyStore()
 
+    const isOnline = computed(() => {
+        return typeof navigator !== 'undefined' ? navigator.onLine : false
+    })
+
     const syncOffline = async () => {
-        if (!navigator.onLine) {
+        if (!isOnline.value) {
             notify.warning({ text: 'Must be online to sync' })
             return
         }
@@ -44,7 +48,7 @@
                     <FontAwesomeIcon :icon="['fas', 'sort-alpha-up']" />
                 </button>
                 <!-- offline sync button -->
-                <button v-if="navigator.onLine" type="button" id="btnSyncOffline" @click="syncOffline" class="button has-line-height p-1 is-ghost has-text-grey ml-2" title="Save for offline use">
+                <button v-if="isOnline" type="button" id="btnSyncOffline" @click="syncOffline" class="button has-line-height p-1 is-ghost has-text-grey ml-2" title="Save for offline use">
                     <FontAwesomeIcon :icon="['fas', 'download']" />
                 </button>
             </div>

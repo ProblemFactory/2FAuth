@@ -271,12 +271,22 @@ export const useTwofaccounts = defineStore({
             // Clear and save all accounts
             await store.clear()
             for (const account of this.items) {
-                // Encrypt sensitive data
-                const encrypted = {
-                    ...account,
-                    secret: CryptoJS.AES.encrypt(account.secret || '', key).toString()
+                // Create a clean object with only serializable data
+                const cleanAccount = {
+                    id: account.id,
+                    service: account.service,
+                    account: account.account,
+                    secret: CryptoJS.AES.encrypt(account.secret || '', key).toString(),
+                    otp_type: account.otp_type,
+                    digits: account.digits,
+                    algorithm: account.algorithm,
+                    period: account.period,
+                    counter: account.counter,
+                    icon: account.icon,
+                    group_id: account.group_id,
+                    order_column: account.order_column
                 }
-                await store.put(encrypted)
+                await store.put(cleanAccount)
             }
             
             localStorage.setItem('2fauth_offline_sync', new Date().toISOString())
