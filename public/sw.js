@@ -6,19 +6,50 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('SW: Opened cache');
-      // Pre-cache the main page and essential assets
+      // Pre-cache the main page and manifest
       return cache.addAll([
         '/',
         '/manifest.json'
       ]).then(() => {
-        // Also try to cache critical assets that are currently available
-        return Promise.allSettled([
-          cache.add('/build/assets/app-SHmEvkuL.js').catch(() => {}),
-          cache.add('/build/assets/app-BIlsKXRE.css').catch(() => {}),
-          cache.add('/favicon.png').catch(() => {}),
-          cache.add('/favicon.ico').catch(() => {}),
-          cache.add('/favicon_lg.png').catch(() => {})
-        ]);
+        // Try to fetch and cache the build manifest to get current asset names
+        return fetch('/build/manifest.json')
+          .then(response => response.json())
+          .then(manifest => {
+            console.log('SW: Got build manifest, caching critical assets');
+            const criticalAssets = [];
+            
+            // Cache the main app entry point and CSS
+            const appEntry = manifest['resources/js/app.js'];
+            if (appEntry) {
+              criticalAssets.push(`/build/${appEntry.file}`);
+              if (appEntry.css && appEntry.css.length > 0) {
+                criticalAssets.push(`/build/${appEntry.css[0]}`);
+              }
+            }
+            
+            // Cache some critical views that are likely to be needed offline
+            const criticalViews = [
+              'resources/js/views/twofaccounts/Accounts.vue',
+              'resources/js/views/auth/Login.vue',
+              'resources/js/views/Error.vue'
+            ];
+            
+            criticalViews.forEach(view => {
+              if (manifest[view]) {
+                criticalAssets.push(`/build/${manifest[view].file}`);
+              }
+            });
+            
+            // Try to cache these assets, but don't fail if some are missing
+            return Promise.allSettled(
+              criticalAssets.map(asset => cache.add(asset).catch(e => {
+                console.log('SW: Failed to cache asset:', asset, e);
+              }))
+            );
+          })
+          .catch(error => {
+            console.log('SW: Failed to load build manifest, skipping asset pre-cache:', error);
+          });
       }).catch(error => {
         console.log('SW: Pre-cache failed:', error);
       });
