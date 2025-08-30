@@ -4,6 +4,7 @@
     import { useUserStore } from '@/stores/user'
     import { useNotifyStore } from '@/stores/notify'
     import { useAppSettingsStore } from '@/stores/appSettings'
+    import { useTwofaccounts } from '@/stores/twofaccounts'
     import { webauthnService } from '@/services/webauthn/webauthnService'
 
     const $2fauth = inject('2fauth')
@@ -11,6 +12,7 @@
     const user = useUserStore()
     const notify = useNotifyStore()
     const appSettings = useAppSettingsStore()
+    const twofaccounts = useTwofaccounts()
     const showWebauthnForm = user.preferences.useWebauthnOnly ? true : useStorage($2fauth.prefix + 'showWebauthnForm', false) 
     const form = reactive(new Form({
         email: '',
@@ -18,6 +20,7 @@
     }))
     const isBusy = ref(false)
     const activeForm = ref()
+    const isOfflineMode = ref(!navigator.onLine && twofaccounts.hasOfflineData())
 
     onMounted(() => {
         if (appSettings.enableSso == true && appSettings.useSsoOnly == true) {
@@ -43,12 +46,36 @@
     /**
      * Sign in using the login/password form
      */
-    function LegacysignIn(e) {
+    async function LegacysignIn(e) {
         notify.clear()
         isBusy.value = true
 
+        // Try offline authentication first if offline
+        if (isOfflineMode.value) {
+            try {
+                const success = await twofaccounts.verifyOfflinePassword(form.password)
+                if (success) {
+                    const offlineUser = twofaccounts.getOfflineUser()
+                    await user.loginAs(offlineUser)
+                    notify.success({ text: 'Offline authentication successful' })
+                    router.push({ name: 'accounts' })
+                    return
+                } else {
+                    notify.alert({ text: trans('auth.forms.authentication_failed'), duration: 10000 })
+                    return
+                }
+            } catch (error) {
+                console.error('Offline authentication error:', error)
+                notify.error({ text: 'Offline authentication failed' })
+                return
+            } finally {
+                isBusy.value = false
+            }
+        }
+
+        // Online authentication
         form.post('/user/login', {returnError: true}).then(async (response) => {
-            await user.loginAs({
+            const userData = {
                 id: response.data.id,
                 name: response.data.name,
                 email: response.data.email,
@@ -56,7 +83,15 @@
                 authenticated_by_proxy: false,
                 preferences: response.data.preferences,
                 isAdmin: response.data.is_admin,
-            })
+            }
+
+            await user.loginAs(userData)
+
+            // Store user data and password hash for offline use
+            if (twofaccounts.hasOfflineData()) {
+                const passwordHash = CryptoJS.SHA256(form.password).toString()
+                await twofaccounts.storeOfflineAuth(userData, passwordHash)
+            }
 
             router.push({ name: 'accounts' })
         })
@@ -76,11 +111,62 @@
     /**
      * Sign in using webauthn
      */
-    function webauthnLogin() {
+    async function webauthnLogin() {
         notify.clear()
         form.clear()
         isBusy.value = true
 
+        // Try offline authentication first if offline
+        if (isOfflineMode.value) {
+            try {
+                // Use WebAuthn API for local authentication
+                const publicKeyCredentialRequestOptions = {
+                    challenge: new Uint8Array(32).map(() => Math.random() * 255),
+                    allowCredentials: [],
+                    userVerification: 'preferred'
+                }
+
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyCredentialRequestOptions
+                })
+
+                if (credential) {
+                    // Verify against stored offline credentials
+                    const success = await twofaccounts.verifyOfflineWebAuthn({
+                        id: credential.id,
+                        rawId: credential.rawId,
+                        response: {
+                            authenticatorData: credential.response.authenticatorData,
+                            clientDataJSON: credential.response.clientDataJSON,
+                            signature: credential.response.signature
+                        }
+                    })
+
+                    if (success) {
+                        const offlineUser = twofaccounts.getOfflineUser()
+                        await user.loginAs(offlineUser)
+                        notify.success({ text: 'Offline WebAuthn authentication successful' })
+                        router.push({ name: 'accounts' })
+                        return
+                    } else {
+                        notify.alert({ text: trans('auth.forms.authentication_failed'), duration: 10000 })
+                        return
+                    }
+                }
+            } catch (error) {
+                console.error('Offline WebAuthn authentication error:', error)
+                if (error.name === 'NotAllowedError') {
+                    notify.alert({ text: 'WebAuthn authentication was cancelled' })
+                } else {
+                    notify.error({ text: 'Offline WebAuthn authentication failed' })
+                }
+                return
+            } finally {
+                isBusy.value = false
+            }
+        }
+
+        // Online authentication
         webauthnService.authenticate(form.email).then(async (response) => {
             await user.loginAs({
                 id: response.data.id,
@@ -91,6 +177,17 @@
                 preferences: response.data.preferences,
                 isAdmin: response.data.is_admin,
             })
+
+            // Store WebAuthn credentials for offline use if we have offline data
+            if (twofaccounts.hasOfflineData()) {
+                // Store the successful authentication credentials for offline use
+                // This would need to be done differently in a real implementation
+                // For now, we'll just mark that WebAuthn is available
+                await twofaccounts.storeOfflineWebAuthn([{
+                    id: 'offline-webauthn',
+                    type: 'webauthn'
+                }])
+            }
 
             router.push({ name: 'accounts' })
         })

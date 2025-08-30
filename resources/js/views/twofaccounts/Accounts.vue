@@ -85,13 +85,22 @@
         // Check if we should try offline mode
         if (!navigator.onLine && twofaccounts.hasOfflineData()) {
             console.log('Attempting to load offline data...')
-            const loaded = await twofaccounts.loadFromOffline()
-            if (loaded) {
-                console.log('Offline data loaded successfully')
-                notify.info({ text: 'Offline mode - using cached data' })
-                if (!user.preferences.getOtpOnRequest) {
-                    startOfflineOtpUpdates()
+            
+            // Check if user is authenticated for offline mode
+            if (twofaccounts.isOfflineAuthenticated()) {
+                const loaded = await twofaccounts.loadFromOffline()
+                if (loaded) {
+                    console.log('Offline data loaded successfully')
+                    notify.info({ text: 'Offline mode - using cached data' })
+                    if (!user.preferences.getOtpOnRequest) {
+                        startOfflineOtpUpdates()
+                    }
+                    return
                 }
+            } else {
+                console.log('No offline authentication - redirecting to login')
+                // User needs to authenticate for offline mode
+                router.push({ name: 'login' })
                 return
             }
         }
