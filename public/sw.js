@@ -1,4 +1,4 @@
-const CACHE_NAME = '2fauth-offline-v8';
+const CACHE_NAME = '2fauth-offline-v9';
 
 // Install event - pre-cache essential resources
 self.addEventListener('install', event => {
@@ -69,12 +69,22 @@ self.addEventListener('install', event => {
               }
             });
             
+            console.log('SW: Critical assets to pre-cache:', criticalAssets);
+            
             // Try to cache these assets, but don't fail if some are missing
             return Promise.allSettled(
-              criticalAssets.map(asset => cache.add(asset).catch(e => {
-                console.log('SW: Failed to cache asset:', asset, e);
-              }))
-            );
+              criticalAssets.map(asset => 
+                cache.add(asset).then(() => {
+                  console.log('SW: Successfully pre-cached:', asset);
+                }).catch(e => {
+                  console.log('SW: Failed to pre-cache asset:', asset, e);
+                })
+              )
+            ).then(results => {
+              const successful = results.filter(r => r.status === 'fulfilled').length;
+              const failed = results.filter(r => r.status === 'rejected').length;
+              console.log(`SW: Pre-caching complete. Success: ${successful}, Failed: ${failed}`);
+            });
           })
           .catch(error => {
             console.log('SW: Failed to load build manifest, skipping asset pre-cache:', error);
