@@ -82,10 +82,6 @@
     })
 
     onMounted(async () => {
-        console.log('Accounts.vue mounted - checking offline mode')
-        console.log('navigator.onLine:', navigator.onLine)
-        console.log('hasOfflineData:', twofaccounts.hasOfflineData())
-        
         // Check if we should try offline mode
         if (!navigator.onLine && twofaccounts.hasOfflineData()) {
             console.log('Attempting to load offline data...')
@@ -93,20 +89,16 @@
             if (loaded) {
                 console.log('Offline data loaded successfully')
                 notify.info({ text: 'Offline mode - using cached data' })
-                // Start auto-updating OTPs
                 if (!user.preferences.getOtpOnRequest) {
                     startOfflineOtpUpdates()
                 }
                 return
-            } else {
-                console.log('Failed to load offline data')
             }
         }
         
         // Try offline mode even if navigator.onLine is true (sometimes unreliable)
         if (twofaccounts.hasOfflineData()) {
             try {
-                console.log('Trying to fetch online first...')
                 if (!user.preferences.getOtpOnRequest) {
                     await Promise.race([
                         updateTotps(),
@@ -139,7 +131,6 @@
             }
         } else {
             // Normal online mode without offline data
-            console.log('No offline data, proceeding with normal online mode')
             if (! user.preferences.getOtpOnRequest) {
                 updateTotps()
             }
