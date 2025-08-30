@@ -82,38 +82,77 @@
     })
 
     onMounted(async () => {
+        console.log('Accounts.vue mounted - checking offline mode')
+        console.log('navigator.onLine:', navigator.onLine)
+        console.log('hasOfflineData:', twofaccounts.hasOfflineData())
+        
         // Check if we should try offline mode
         if (!navigator.onLine && twofaccounts.hasOfflineData()) {
+            console.log('Attempting to load offline data...')
             const loaded = await twofaccounts.loadFromOffline()
             if (loaded) {
+                console.log('Offline data loaded successfully')
                 notify.info({ text: 'Offline mode - using cached data' })
                 // Start auto-updating OTPs
                 if (!user.preferences.getOtpOnRequest) {
                     startOfflineOtpUpdates()
                 }
                 return
+            } else {
+                console.log('Failed to load offline data')
             }
         }
         
-        // Normal online mode
-        // This SFC is reached only if the user has some twofaccounts (see the starter middleware).
-        // This allows to display accounts without latency.
-        //
-        // We sync the store with the backend again to
-        if (! user.preferences.getOtpOnRequest) {
-            updateTotps()
-        }
-        else {
-            twofaccounts.fetch().then(() => {
-                if (twofaccounts.backendWasNewer) {
-                    notify.info({ text: trans('commons.data_refreshed_to_reflect_server_changes'), duration: 10000 })
+        // Try offline mode even if navigator.onLine is true (sometimes unreliable)
+        if (twofaccounts.hasOfflineData()) {
+            try {
+                console.log('Trying to fetch online first...')
+                if (!user.preferences.getOtpOnRequest) {
+                    await Promise.race([
+                        updateTotps(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+                    ])
+                } else {
+                    await Promise.race([
+                        twofaccounts.fetch(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+                    ])
+                    if (twofaccounts.backendWasNewer) {
+                        notify.info({ text: trans('commons.data_refreshed_to_reflect_server_changes'), duration: 10000 })
+                    }
                 }
-            })
-        }
-        groups.fetch()
-        
-        // Auto-save to offline storage when online
-        if (navigator.onLine) {
+                await groups.fetch()
+                
+                // Auto-save to offline storage when online
+                setTimeout(() => twofaccounts.saveToOffline(), 2000)
+                
+            } catch (error) {
+                console.log('Online fetch failed, switching to offline mode:', error)
+                const loaded = await twofaccounts.loadFromOffline()
+                if (loaded) {
+                    notify.warning({ text: 'Server unreachable - using offline mode' })
+                    if (!user.preferences.getOtpOnRequest) {
+                        startOfflineOtpUpdates()
+                    }
+                    return
+                }
+            }
+        } else {
+            // Normal online mode without offline data
+            console.log('No offline data, proceeding with normal online mode')
+            if (! user.preferences.getOtpOnRequest) {
+                updateTotps()
+            }
+            else {
+                twofaccounts.fetch().then(() => {
+                    if (twofaccounts.backendWasNewer) {
+                        notify.info({ text: trans('commons.data_refreshed_to_reflect_server_changes'), duration: 10000 })
+                    }
+                })
+            }
+            groups.fetch()
+            
+            // Auto-save to offline storage when online
             setTimeout(() => twofaccounts.saveToOffline(), 2000)
         }
     })
