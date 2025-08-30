@@ -17,6 +17,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
     - name: Checkout repository
@@ -73,6 +75,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
+    # Generate artifact attestation (optional security feature)
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       if: github.event_name != 'pull_request'
@@ -80,3 +83,4 @@ jobs:
         subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
         subject-digest: ${{ steps.build.outputs.digest }}
         push-to-registry: true
+      continue-on-error: true  # 如果失败不影响镜像构建
